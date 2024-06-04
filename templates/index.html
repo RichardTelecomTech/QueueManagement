@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genesys Cloud Queue Viewer</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">Genesys Cloud Queue Viewer</h1>
+        <div class="form-group">
+            <label for="queues">Select a Queue:</label>
+            <select class="form-control" id="queues" onchange="fetchQueueMembers()">
+                <option value="">Select a Queue</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="skills">Filter by Skill:</label>
+            <select class="form-control" id="skills" onchange="filterBySkill()">
+                <option value="">Select a Skill</option>
+            </select>
+        </div>
+        <div class="members">
+            <h2 class="text-center mt-4">Active Members</h2>
+            <table class="table table-striped mt-3">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Name</th>
+                        <th>Skill</th>
+                        <th>Proficiency</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="membersTable"></tbody>
+            </table>
+            <div class="text-center">
+                <button class="btn btn-primary mt-3" onclick="saveAllSettings()">Save All Settings</button>
+            </div>
+        </div>
+        <div class="add-agent mt-5">
+            <h2 class="text-center mb-4">Add Agent to Queue</h2>
+            <div class="form-group">
+                <label for="agentId">Agent User ID:</label>
+                <input type="text" class="form-control" id="agentId" placeholder="Enter Agent User ID">
+            </div>
+            <div class="text-center">
+                <button class="btn btn-success" onclick="addAgentToQueue()">Add Agent</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        let allMembers = [];
+
+        document.addEventListener("DOMContentLoaded", function() {
+            fetch('/get_queues')
+                .then(response => response.json())
+                .then(data => {
+                    const queuesSelect = document.getElementById('queues');
+                    data.entities.forEach(queue => {
+                        const option = document.createElement('option');
+                        option.value = queue.id;
+                        option.textContent = queue.name;
+                        queuesSelect.appendChild(option);
+                    });
+                });
+        });
+
+        function fetchQueueMembers() {
+            const queueId = document.getElementById('queues').value;
+            if (queueId) {
+                fetch('/get_queue_members', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `queue_id=${queueId}`
+                })
+                .then(response => response.json())
+                .then(data => {
+                    allMembers = data.entities.filter(member => member.joined); // Only show joined members
+                    populateSkillFilter();
+                    displayMembers(allMembers);
+                });
+            }
+        }
+
+        function populateSkillFilter() {
+            const skillsSelect = document.getElementById('skills');
+            skillsSelect.innerHTML = '<option value="">Select a Skill</option>';
+
+            const skills = new Set();
+            allMembers.forEach(member => {
+                member.user.skills.forEach(skill => skills.add(skill.name));
+            });
+
+            skills.forEach(skill => {
+                const option = document.createElement('option');
+                option.value = skill;
+                option.textContent = skill;
+                skillsSelect.appendChild(option);
+            });
+        }
+
+        function filterBySkill() {
+            const selectedSkill = document.getElementById('skills').value;
+            const filteredMembers = selectedSkill
+                ? allMembers.filter(member => member.user.skills.some(skill => skill.name === selectedSkill))
+                : allMembers;
+
+            displayMembers(filteredMembers, selectedSkill);
+        }
+
+        function displayMembers(members, selectedSkill) {
+            const membersTableBody = document.getElementById('membersTable');
+            membersTableBody.innerHTML = '';
+            members.forEach(member => {
+                const row = document.createElement('tr');
+                row.dataset.userId = member.user.id; // Store user ID in the row
+
+                const nameCell = document.createElement('td');
+                nameCell.textContent = member.user.name;
+
+                const skillsCell = document.createElement('td');
+                const proficiencyCell = document.createElement('td');
+                const actionCell = document.createElement('td');
+
+                const skill = member.user.skills.find(skill => skill.name === selectedSkill);
+                if (skill) {
+                    skillsCell.textContent = skill.name;
+
+                    const proficiencyDropdown = document.createElement('select');
+                    proficiencyDropdown.classList.add('form-control');
+                    proficiencyDropdown.dataset.skillId = skill.id; // Store skill ID in the dropdown
+                    for (let i = 1; i <= 5; i++) {
+                        const option = document.createElement('option');
+                        option.value = i;
+                        option.textContent = i;
+                        if (i == skill.proficiency) {
+                            option.selected = true;
+                        }
+                        proficiencyDropdown.appendChild(option);
+                    }
+                    proficiencyCell.appendChild(proficiencyDropdown);
+
+                    const saveButton = document.createElement('button');
+                    saveButton.classList.add('btn', 'btn-secondary');
+                    saveButton.textContent = 'Save';
+                    saveButton.onclick = function() {
+                        saveSingleSetting(member.user.id, skill.id, proficiencyDropdown.value);
+                    };
+                    actionCell.appendChild(saveButton);
+                } else {
+                    skillsCell.textContent = 'No skills assigned';
+                    proficiencyCell.textContent = 'N/A';
+                }
+                row.appendChild(nameCell);
+                row.appendChild(skillsCell);
+                row.appendChild(proficiencyCell);
+                row.appendChild(actionCell);
+                membersTableBody.appendChild(row);
+            });
+        }
+
+        function saveSingleSetting(userId, skillId, proficiency) {
+            const skillsData = [{ id: skillId, proficiency }];
+
+            fetch('/update_skills', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId, skills: skillsData })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Settings updated successfully.');
+                } else {
+                    alert('Failed to update settings.');
+                }
+            });
+        }
+
+        function saveAllSettings() {
+            const rows = document.querySelectorAll('#membersTable tr');
+            const updates = [];
+
+            rows.forEach(row => {
+                const userId = row.dataset.userId; // Get the user ID from the row data attribute
+                const skillName = row.querySelector('td:nth-child(2)').textContent;
+                const proficiencyDropdown = row.querySelector('select');
+                const proficiency = proficiencyDropdown.value;
+                const skillId = proficiencyDropdown.dataset.skillId;
+
+                const skillsData = [{ name: skillName, proficiency, id: skillId }];
+                updates.push({ userId, skills: skillsData });
+            });
+
+            fetch('/update_skills', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ updates })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('All settings updated successfully.');
+                } else {
+                    alert('Failed to update settings.');
+                }
+            });
+        }
+
+        function addAgentToQueue() {
+            const agentId = document.getElementById('agentId').value;
+            const queueId = document.getElementById('queues').value;
+
+            fetch('/add_agent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: agentId, queueId: queueId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Agent added to queue successfully.');
+                    fetchQueueMembers(); // Refresh the queue members list
+                } else {
+                    alert('Failed to add agent to queue.');
+                }
+            });
+        }
+    </script>
+</body>
+</html>
