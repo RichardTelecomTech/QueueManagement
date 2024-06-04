@@ -39,6 +39,29 @@ def get_queues():
         print(f"Error fetching queues: {e}")
         return jsonify({"error": "Failed to fetch queues"}), 500
 
+def fetch_all_users():
+    all_users = []
+    page = 1
+    page_size = 100
+    while True:
+        response = requests.get(f'https://api.mypurecloud.com.au/api/v2/users?pageSize={page_size}&pageNumber={page}', headers=headers)
+        response.raise_for_status()  # Check if the request was successful
+        data = response.json()
+        all_users.extend(data['entities'])
+        if not data.get('nextUri'):
+            break
+        page += 1
+    return all_users
+
+@app.route('/get_users', methods=['GET'])
+def get_users():
+    try:
+        users = fetch_all_users()
+        return jsonify({'entities': users})
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching users: {e}")
+        return jsonify({"error": "Failed to fetch users"}), 500
+
 @app.route('/get_queue_members', methods=['POST'])
 def get_queue_members():
     queue_id = request.form['queue_id']
