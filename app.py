@@ -1,3 +1,5 @@
+import os
+
 from flask import Flask, render_template, request, jsonify
 import requests
 import json
@@ -6,7 +8,7 @@ app = Flask(__name__)
 
 # Replace with your Genesys Cloud API headers
 headers = {
-    'Authorization': 'Bearer du5lDtNgvO0RHNeJ5I4V_mPMNRffrS1ShvH1wWyPEmn26g2DAcYYPEmNfYXzbx9TdgkY2o8eBTkV3NK_1QmjMw',
+    'Authorization': 'Bearer YOUR_ACCESS_TOKEN',
     'Content-Type': 'application/json'
 }
 
@@ -94,4 +96,4 @@ def add_agent():
         return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
