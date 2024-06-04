@@ -6,7 +6,7 @@ app = Flask(__name__)
 
 # Replace with your Genesys Cloud API headers
 headers = {
-    'Authorization': 'Bearer du5lDtNgvO0RHNeJ5I4V_mPMNRffrS1ShvH1wWyPEmn26g2DAcYYPEmNfYXzbx9TdgkY2o8eBTkV3NK_1QmjMw',
+    'Authorization': 'Bearer ENTER ACCESS KEY',
     'Content-Type': 'application/json'
 }
 
